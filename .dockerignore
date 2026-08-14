@@ -1,0 +1,16 @@
+node_modules
+dist
+coverage
+.vite
+
+.git
+.gitignore
+
+Dockerfile*
+compose*.yaml
+
+.env
+.env.*
+!.env.example
+
+*.log

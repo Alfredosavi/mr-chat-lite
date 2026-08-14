@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_TWITCH_CLIENT_ID: ${VITE_TWITCH_CLIENT_ID:-}
+
+    ports:
+      - "127.0.0.1:5173:80"
+
+    restart: unless-stopped
+
+    mem_limit: 64m
+    cpus: 0.25

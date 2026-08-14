@@ -1,0 +1,20 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+
+    init: true
+
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+
+    ports:
+      - "127.0.0.1:5173:5173"
+
+    environment:
+      VITE_TWITCH_CLIENT_ID: ${VITE_TWITCH_CLIENT_ID:-}
+
+volumes:
+  node_modules:
