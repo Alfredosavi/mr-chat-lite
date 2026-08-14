@@ -118,7 +118,7 @@
 </script>
 
 <div class="auth-overlay-backdrop" role="presentation">
-    <section
+    <div
         class="auth-panel"
         role="dialog"
         aria-modal="true"
@@ -187,5 +187,5 @@
         {:else}
             <AuthResult {status} {message} onRetry={beginDevice} />
         {/if}
-    </section>
+    </div>
 </div>
