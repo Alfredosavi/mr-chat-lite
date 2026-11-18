@@ -247,10 +247,10 @@ export function logout() {
 export async function startDeviceFlow() {
     requireClientId();
 
-    const body = new FormData();
-
-    body.set("client_id", CLIENT_ID);
-    body.set("scopes", SCOPES.join(" "));
+    const body = new URLSearchParams({
+        client_id: CLIENT_ID,
+        scope: SCOPES.join(" "),
+    });
 
     console.debug("[OAuth] Iniciando Device Code Flow.", {
         scopes: SCOPES,
@@ -261,6 +261,9 @@ export async function startDeviceFlow() {
     try {
         response = await fetch(DEVICE_ENDPOINT, {
             method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
             body,
             cache: "no-store",
         });
@@ -303,18 +306,21 @@ export async function pollDeviceToken(deviceCode) {
 
     const normalizedDeviceCode = requiredString(deviceCode, "device_code");
 
-    const body = new FormData();
-
-    body.set("client_id", CLIENT_ID);
-    body.set("scopes", SCOPES.join(" "));
-    body.set("device_code", normalizedDeviceCode);
-    body.set("grant_type", DEVICE_GRANT_TYPE);
+    const body = new URLSearchParams({
+        client_id: CLIENT_ID,
+        scopes: SCOPES.join(" "),
+        device_code: normalizedDeviceCode,
+        grant_type: DEVICE_GRANT_TYPE,
+    });
 
     let response;
 
     try {
         response = await fetch(TOKEN_ENDPOINT, {
             method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
             body,
             cache: "no-store",
         });
@@ -544,7 +550,6 @@ export async function validateToken(
             headers: {
                 Authorization: `Bearer ${token}`,
             },
-
             cache: "no-store",
         });
     } catch (error) {
