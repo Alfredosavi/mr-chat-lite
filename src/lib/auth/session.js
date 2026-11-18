@@ -133,17 +133,6 @@ export function createAuthSession({
             return getState();
         }
 
-        // -----------------------------------------------------------------------
-        const validateAt = Date.now();
-        emit({
-            status: SESSION_STATUS.AUTHENTICATED,
-            user: state.user,
-            lastValidatedAt: validateAt,
-            validationError: null,
-        });
-        return getState(); // TODO: BYPASS
-        // -----------------------------------------------------------------------
-
         const wasAuthenticated = state.status === SESSION_STATUS.AUTHENTICATED;
 
         /*

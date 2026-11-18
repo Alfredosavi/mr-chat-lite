@@ -25,16 +25,10 @@
 
         const contentWidth = tickerContent.getBoundingClientRect().width;
 
-        /*
-         * Pequena margem para não deixar o último caractere
-         * encostar/cortar antes de ativar o scroll.
-         */
-        const safetyMargin = 8;
-
-        tickerOverflow = contentWidth > viewportWidth - safetyMargin;
+        tickerOverflow = contentWidth > viewportWidth;
 
         tickerDistance = tickerOverflow
-            ? Math.max(0, contentWidth - viewportWidth + safetyMargin)
+            ? contentWidth - viewportWidth
             : 0;
     }
 
@@ -92,6 +86,12 @@
 
     $: uptime = $liveInfo.live ? formatUptime($liveInfo.startedAt, now) : "";
 
+    $: liveStatusLabel = $liveInfo.live === true
+        ? "Canal ao vivo"
+        : $liveInfo.live === false
+          ? "Canal offline"
+          : "Estado da live indisponível";
+
     onMount(() => {
         updateTicker();
 
@@ -117,8 +117,11 @@
     <div class="channel-status">
         <span
     class="status-dot"
-    class:live={$liveInfo.live}
-    aria-hidden="true"
+    class:live={$liveInfo.live === true}
+    class:unknown={$liveInfo.live === null}
+    role="img"
+    aria-label={liveStatusLabel}
+    title={liveStatusLabel}
 ></span>
 
         <strong class="channel" title={`#${channel}`}>
@@ -321,6 +324,11 @@
         0 0 0 3px
         rgba(85, 214, 139, 0.08);
 }
+
+    .status-dot.unknown {
+        background: #d4aa55;
+        box-shadow: 0 0 0 3px rgba(212, 170, 85, 0.08);
+    }
 
     .channel {
         min-width: 0;

@@ -5,6 +5,7 @@
     } from "svelte";
 
     import ChatMessage from "./ChatMessage.svelte";
+    import { createMessageTracker } from "../../lib/chat/message-tracker.js";
 
     import {
         chatStore,
@@ -39,18 +40,18 @@
      */
     let mouseOverChat = false;
     let altPressed = false;
+    let temporaryPauseDismissed = false;
 
     let newMessageCount = 0;
 
-    let previousSourceLastId = null;
-    let previousSourceLength = 0;
+    const messageTracker = createMessageTracker();
 
     let scrollGeneration = 0;
 
     $: pauseMode =
         $displaySettings.pauseMode;
 
-    $: temporaryPaused =
+    $: temporaryPaused = !temporaryPauseDismissed && (
         (
             (
                 pauseMode ===
@@ -68,7 +69,7 @@
                     CHAT_PAUSE_MODES.MOUSE_OR_ALT
             ) &&
             altPressed
-        );
+        ));
 
     $: chatPaused =
         manualPaused ||
@@ -127,6 +128,10 @@
     }
 
     function isTemporaryPauseActive() {
+        if (temporaryPauseDismissed) {
+            return false;
+        }
+
         return (
             (
                 modeUsesMouse() &&
@@ -190,6 +195,12 @@
         newMessageCount = 0;
     }
 
+    function resumeChat() {
+        temporaryPauseDismissed = true;
+        scrollGeneration += 1;
+        scrollToBottom();
+    }
+
     async function resumeAfterTemporaryPause() {
         /*
          * Se o usuário rolou para cima,
@@ -221,6 +232,7 @@
     }
 
     function handleMouseEnter() {
+        temporaryPauseDismissed = false;
         mouseOverChat = true;
     }
 
@@ -239,6 +251,7 @@
         }
 
         altPressed = true;
+        temporaryPauseDismissed = false;
     }
 
     function handleKeyUp(event) {
@@ -270,102 +283,17 @@
         sourceMessages,
         renderedMessages,
     ) {
-        const sourceLastId =
-            sourceMessages.at(-1)?.id ??
-            null;
+        const addedCount = messageTracker.update(sourceMessages, renderedMessages);
 
-        const sourceLength =
-            sourceMessages.length;
-
-        /*
-         * Reset/troca de canal.
-         */
-        if (!sourceLastId) {
-            previousSourceLastId =
-                null;
-
-            previousSourceLength = 0;
-
+        if (sourceMessages.length === 0) {
+            scrollGeneration += 1;
             manualPaused = false;
             newMessageCount = 0;
-
-            return;
-        }
-
-        /*
-         * Primeira mensagem conhecida.
-         */
-        if (!previousSourceLastId) {
-            previousSourceLastId =
-                sourceLastId;
-
-            previousSourceLength =
-                sourceLength;
-
-            const generation =
-                ++scrollGeneration;
-
-            await tick();
-
-            if (
-                generation ===
-                    scrollGeneration &&
-                !isPausedNow()
-            ) {
-                scrollToBottom();
-            }
-
-            return;
-        }
-
-        const previousLastId =
-            previousSourceLastId;
-
-        const previousLength =
-            previousSourceLength;
-
-        previousSourceLastId =
-            sourceLastId;
-
-        previousSourceLength =
-            sourceLength;
-
-        const lastMessageChanged =
-            sourceLastId !==
-            previousLastId;
-
-        const receivedNewMessage =
-            lastMessageChanged &&
-            sourceLength >=
-                previousLength;
-
-        if (!receivedNewMessage) {
-            return;
-        }
-
-        /*
-         * Mensagem bloqueada por filtro não
-         * entra no contador visual.
-         */
-        const newMessageIsVisible =
-            renderedMessages.at(-1)?.id ===
-            sourceLastId;
-
-        if (!newMessageIsVisible) {
             return;
         }
 
         if (isPausedNow()) {
-            const addedCount =
-                sourceLength >
-                previousLength
-                    ? sourceLength -
-                      previousLength
-                    : 1;
-
-            newMessageCount +=
-                addedCount;
-
+            newMessageCount += addedCount;
             return;
         }
 
@@ -390,7 +318,7 @@
         visibleMessages,
     );
 
-    onMount(async () => {
+    onMount(() => {
         window.addEventListener(
             "keydown",
             handleKeyDown,
@@ -406,11 +334,14 @@
             handleWindowBlur,
         );
 
-        await tick();
-
-        scrollToBottom();
+        let mounted = true;
+        void tick().then(() => {
+            if (mounted) scrollToBottom();
+        });
 
         return () => {
+            mounted = false;
+            scrollGeneration += 1;
             window.removeEventListener(
                 "keydown",
                 handleKeyDown,
@@ -449,7 +380,7 @@
         <button
             class="new-messages"
             type="button"
-            onclick={scrollToBottom}
+            onclick={resumeChat}
             aria-label="Chat pausado. Clique para voltar ao final."
         >
             <span>

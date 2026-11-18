@@ -3,9 +3,7 @@
 
     import AppShell from "./components/layout/AppShell.svelte";
     import AuthOverlay from "./components/AuthOverlay/AuthOverlay.svelte";
-    import {
-    channelSettings,
-} from "./lib/stores/channel-settings.js";
+    import { channelSettings } from "./lib/stores/channel-settings.js";
 
     import {
         createAuthSession,
@@ -27,12 +25,12 @@
     let chatChannel = "";
 
     let chatConnectionStarted = false;
+    let chatGeneration = 0;
     let destroyed = false;
 
     async function ensureChatConnected(
-    channelLogin =
-        channelSettings.getChannelLogin(),
-) {
+        channelLogin = channelSettings.getChannelLogin(),
+    ) {
         if (
             destroyed ||
             chatConnectionStarted
@@ -41,20 +39,18 @@
         }
 
         chatConnectionStarted = true;
+        const generation = ++chatGeneration;
 
         try {
             const result = await connectChat({
-    channelLogin,
-});
+                channelLogin,
+            });
 
-            if (destroyed) {
-                return;
+            if (destroyed || generation !== chatGeneration) {
+                throw new DOMException("Operação cancelada.", "AbortError");
             }
 
-            chatChannel =
-                result?.broadcaster?.login ??
-                result?.currentUser?.login ??
-                "";
+            chatChannel = result.broadcaster.login;
 
             console.log(
                 "[App] Chat Twitch inicializado.",
@@ -63,8 +59,8 @@
                 },
             );
         } catch (error) {
-            if (destroyed) {
-                return;
+            if (destroyed || generation !== chatGeneration) {
+                throw error;
             }
 
             chatConnectionStarted = false;
@@ -73,47 +69,29 @@
                 "[App] Não foi possível inicializar o chat.",
                 error,
             );
+            throw error;
         }
     }
 
     function stopChat() {
+        chatGeneration += 1;
         chatConnectionStarted = false;
         chatChannel = "";
 
         disconnectChat();
     }
 
-    async function handleReconnectChannel(
-    channelLogin,
-) {
-    const normalized =
-        channelSettings.normalize(
-            channelLogin,
-        );
+    async function handleReconnectChannel(channelLogin) {
+        const normalized = channelSettings.normalize(channelLogin);
 
-    /*
-     * Encerra a conexão atual antes
-     * de trocar o broadcaster.
-     */
-    chatConnectionStarted = false;
-    chatChannel = "";
+        stopChat();
+        await ensureChatConnected(normalized);
 
-    disconnectChat();
+        // Só persiste depois de confirmar a conexão e suas subscriptions.
+        channelSettings.save(normalized);
 
-    await ensureChatConnected(
-        normalized,
-    );
-
-    /*
-     * Só persistimos se a conexão
-     * realmente foi concluída.
-     */
-    channelSettings.save(
-        normalized,
-    );
-
-    return chatChannel;
-}
+        return chatChannel;
+    }
 
     const authSession = createAuthSession({
         onUpdate(nextState) {
@@ -123,7 +101,9 @@
                 nextState.status ===
                 SESSION_STATUS.AUTHENTICATED
             ) {
-                void ensureChatConnected();
+                void ensureChatConnected().catch(() => {
+                    // O erro já foi registrado; a troca manual permite tentar novamente.
+                });
                 return;
             }
 
@@ -160,9 +140,9 @@
 
 {#if sessionState.status === SESSION_STATUS.AUTHENTICATED}
     <AppShell
-    channel={chatChannel}
-    onReconnectChannel={handleReconnectChannel}
-/>
+        channel={chatChannel}
+        onReconnectChannel={handleReconnectChannel}
+    />
 {:else if
     sessionState.status === SESSION_STATUS.IDLE ||
     sessionState.status === SESSION_STATUS.CHECKING ||

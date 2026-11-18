@@ -203,6 +203,15 @@ export function createChatClient({
 
         channel = broadcaster;
 
+        let resolveReady;
+        let rejectReady;
+        const ready = new Promise((resolve, reject) => {
+            resolveReady = resolve;
+            rejectReady = reject;
+        });
+        const abortReady = () => rejectReady(createAbortError());
+        controller.signal.addEventListener("abort", abortReady, { once: true });
+
         const transport = createEventSubClient({
             async onWelcome({ sessionId }) {
                 if (!isCurrent(id, controller)) {
@@ -285,6 +294,12 @@ export function createChatClient({
                     attempt: transportState.attempt ?? null,
                     migration: transportState.migration === true,
                 });
+
+                if (transportState.status === "connected") {
+                    resolveReady();
+                } else if (transportState.status === "error") {
+                    rejectReady(transportState.error);
+                }
             },
 
             onError(error) {
@@ -309,7 +324,17 @@ export function createChatClient({
         eventSubClient = transport;
         transport.connect();
 
-        return broadcaster;
+        try {
+            await ready;
+
+            if (!isCurrent(id, controller)) {
+                throw createAbortError();
+            }
+
+            return broadcaster;
+        } finally {
+            controller.signal.removeEventListener("abort", abortReady);
+        }
     }
 
     function disconnect({ reset = true } = {}) {

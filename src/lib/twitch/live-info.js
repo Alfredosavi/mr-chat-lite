@@ -9,7 +9,7 @@ const EMPTY_STATE = Object.freeze({
 
     broadcasterId: null,
 
-    live: false,
+    live: null,
 
     title: "",
     category: "",
@@ -147,6 +147,9 @@ async function refresh(
                 Object.freeze({
                     ...state,
                     status: "error",
+                    live: null,
+                    viewers: null,
+                    startedAt: null,
                 }),
         );
 
@@ -185,8 +188,8 @@ async function refresh(
             ? streamResult.value
             : null;
 
-    const live =
-        Boolean(stream);
+    // Falha de consulta não significa que a transmissão terminou.
+    const live = streamResult.status === "fulfilled" ? Boolean(stream) : null;
 
     /*
      * Quando está ao vivo, preferimos os

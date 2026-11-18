@@ -106,7 +106,7 @@
         (saved) => saved.key === messageKey,
     );
 
-    async function openMenuAt(x, y) {
+    async function openMenuAt(x, y, focusMenu = false) {
         menuX = x;
         menuY = y;
         menuOpen = true;
@@ -126,18 +126,23 @@
         if (rect.bottom > window.innerHeight - margin) {
             menuY = Math.max(margin, window.innerHeight - rect.height - margin);
         }
+
+        if (focusMenu) {
+            menuElement.querySelector('[role="menuitem"]')?.focus();
+        }
     }
 
     function handleMessageClick(event) {
         openMenuAt(event.clientX, event.clientY);
     }
 
-    function closeMenu() {
+    function closeMenu(restoreFocus = false) {
         menuOpen = false;
+        if (restoreFocus) messageElement?.focus({ preventScroll: true });
     }
 
     function handleMessageKeydown(event) {
-        if (event.key === "Enter" || event.key === " ") {
+        if (event.key === "Enter" || event.key === " " || event.key === "ArrowDown") {
             event.preventDefault();
 
             const rect = messageElement.getBoundingClientRect();
@@ -146,6 +151,7 @@
                 rect.left + Math.min(rect.width / 2, 160),
 
                 rect.top + rect.height / 2,
+                true,
             );
 
             return;
@@ -154,6 +160,36 @@
         if (event.key === "Escape") {
             closeMenu();
         }
+    }
+
+    function handleMenuKeydown(event) {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            closeMenu(true);
+            return;
+        }
+
+        if (event.key === "Tab") {
+            // Volta ao acionador antes de deixar o navegador avançar o foco.
+            closeMenu(true);
+            return;
+        }
+
+        const items = Array.from(menuElement.querySelectorAll('[role="menuitem"]'));
+        const current = items.indexOf(document.activeElement);
+        let next;
+
+        switch (event.key) {
+            case "ArrowDown": next = (current + 1) % items.length; break;
+            case "ArrowUp": next = (current - 1 + items.length) % items.length; break;
+            case "Home": next = 0; break;
+            case "End": next = items.length - 1; break;
+            default: return;
+        }
+
+        event.preventDefault();
+        items[next]?.focus();
     }
 
     function handleDocumentClick(event) {
@@ -179,13 +215,13 @@
             });
         }
 
-        closeMenu();
+        closeMenu(true);
     }
 
     function blacklistMessageUser() {
         userBlacklist.addMessageUser(message);
 
-        closeMenu();
+        closeMenu(true);
     }
 
     onMount(() => {
@@ -286,17 +322,20 @@
             class="message-menu"
             bind:this={menuElement}
             role="menu"
+            tabindex="-1"
             style:left={`${menuX}px`}
             style:top={`${menuY}px`}
             onclick={(event) => event.stopPropagation()}
+            onkeydown={handleMenuKeydown}
         >
-            <button type="button" role="menuitem" onclick={toggleSavedMessage}>
+            <button type="button" role="menuitem" tabindex="-1" onclick={toggleSavedMessage}>
                 {messageIsSaved ? "Remover dos salvos" : "Salvar mensagem"}
             </button>
 
             <button
                 type="button"
                 role="menuitem"
+                tabindex="-1"
                 onclick={blacklistMessageUser}
             >
                 Adicionar usuário à blacklist

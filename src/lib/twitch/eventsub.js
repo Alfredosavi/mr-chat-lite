@@ -378,12 +378,22 @@ export function createEventSubClient({
 
             emitError(error);
 
-            /*
-             * Não existe conexão útil se não
-             * conseguimos criar as subscriptions
-             * obrigatórias.
-             */
-            stop();
+            const retryable =
+                error?.code === "network_error" ||
+                error?.status === 429 ||
+                error?.status >= 500;
+
+            if (retryable) {
+                // Uma sessão nova exige subscriptions novas.
+                socket = null;
+                sessionId = null;
+                clearWatchdog();
+                safeClose(ws, 1000, "Subscription retry");
+                scheduleReconnect();
+            } else {
+                stop();
+                emitState("error", { error });
+            }
 
             return;
         }
@@ -673,6 +683,7 @@ export function createEventSubClient({
         socket = ws;
 
         attachSocket(ws);
+        resetWatchdog();
     }
 
     function openHandoff(url) {

@@ -5,6 +5,8 @@ import { clearBadgeCatalog, loadBadgeCatalog } from "../twitch/badges.js";
 import { startLiveInfo, stopLiveInfo } from "../twitch/live-info.js";
 
 let connectionPromise = null;
+let connectionController = null;
+let generation = 0;
 
 const chatClient = createChatClient({
     onStateChange(state) {
@@ -37,8 +39,19 @@ export async function connectChat({ channelLogin = "" } = {}) {
         return connectionPromise;
     }
 
+    const id = ++generation;
+    const controller = new AbortController();
+    connectionController = controller;
+
+    function assertCurrent() {
+        if (id !== generation || controller.signal.aborted) {
+            throw new DOMException("Operação cancelada.", "AbortError");
+        }
+    }
+
     const promise = (async () => {
-        const currentUser = await getCurrentUser();
+        const currentUser = await getCurrentUser({ signal: controller.signal });
+        assertCurrent();
 
         const targetChannel =
             String(channelLogin ?? "").trim() || currentUser.login;
@@ -48,15 +61,14 @@ export async function connectChat({ channelLogin = "" } = {}) {
             userId: currentUser.id,
         });
 
-        if (broadcaster) {
-    void loadBadgeCatalog(
-        broadcaster.id,
-    );
+        assertCurrent();
 
-    void startLiveInfo(
-        broadcaster.id,
-    );
-}
+        if (!broadcaster) {
+            throw new DOMException("Operação cancelada.", "AbortError");
+        }
+
+        void loadBadgeCatalog(broadcaster.id);
+        void startLiveInfo(broadcaster.id);
 
         return Object.freeze({
             currentUser,
@@ -71,11 +83,15 @@ export async function connectChat({ channelLogin = "" } = {}) {
     } finally {
         if (connectionPromise === promise) {
             connectionPromise = null;
+            connectionController = null;
         }
     }
 }
 
 export function disconnectChat({ reset = true } = {}) {
+    generation += 1;
+    connectionController?.abort();
+    connectionController = null;
     connectionPromise = null;
 
     stopLiveInfo();
